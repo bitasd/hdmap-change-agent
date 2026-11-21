@@ -1,6 +1,6 @@
 """Phase 2: plot only the lane-paint points of one TbV log, over the HD map.
 
-Usage: .venv/bin/python src/plot_paint.py data/<LOG_ID> [--min-intensity 80] [--max-intensity 120] [--out docs/paint_on_map.png]
+Usage: .venv/bin/python src/plot_paint.py data/<LOG_ID> [--min-intensity 80] [--max-intensity 120] [--out paint_on_map.png]
 """
 
 import argparse
@@ -20,7 +20,7 @@ def main() -> None:
     parser.add_argument("--min-intensity", type=float, default=80.0)
     parser.add_argument("--max-intensity", type=float, default=120.0)
     parser.add_argument("--paint-range", type=float, default=25.0, help="only trust paint seen within this range (m)")
-    parser.add_argument("--out", type=Path, default=Path("docs/paint_on_map.png"))
+    parser.add_argument("--out", type=Path, default=Path("paint_on_map.png"))
     args = parser.parse_args()
 
     xyz, intensity, rng, city_SE3_ego = load_city_points(args.log_dir, every=args.every)

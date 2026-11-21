@@ -1,6 +1,6 @@
 """Plot one TbV log's LiDAR points in the city (map) frame over the HD map lane boundaries.
 
-Usage: .venv/bin/python src/plot_lidar_on_map.py data/<LOG_ID> [--every 5] [--out docs/lidar_on_map.png]
+Usage: .venv/bin/python src/plot_lidar_on_map.py data/<LOG_ID> [--every 5] [--out lidar_on_map.png]
 """
 
 import argparse
@@ -26,7 +26,7 @@ def main() -> None:
     pose_ts = np.array(sorted(city_SE3_ego))
 
     # 2. LiDAR sweeps are stored in the ego-vehicle frame. Move each into the city frame
-    #    with the pose closest in time (poses ~50 Hz, sweeps 10 Hz).
+    #    with the pose closest in time (poses ~170 Hz, sweeps 10 Hz).
     sweep_paths = sorted((args.log_dir / "sensors" / "lidar").glob("*.feather"))[:: args.every]
     xyz_city, intensity = [], []
     for path in sweep_paths:

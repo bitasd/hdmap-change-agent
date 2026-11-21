@@ -11,7 +11,7 @@ from av2.utils.io import read_city_SE3_ego, read_feather
 def load_city_points(log_dir: Path, every: int = 1, max_range: float = 40.0):
     """Load LiDAR sweeps and move them from the ego-vehicle frame into the city frame.
 
-    Each sweep uses the ego pose closest in time (poses ~50 Hz, sweeps 10 Hz).
+    Each sweep uses the ego pose closest in time (poses ~170 Hz, sweeps 10 Hz).
 
     Returns:
         xyz_city: (N, 3) points in the city frame.

@@ -1,0 +1,13 @@
+{
+  "n_sweeps": 156,
+  "duration_s": 15.5,
+  "n_poses": 2690,
+  "points_per_sweep": 100974,
+  "accumulated_points": 6285093,
+  "ground_frac": 0.342,
+  "paint_points": 36912,
+  "band_on_map_frac": 0.668,
+  "ge50_on_map_frac": 0.356,
+  "boundaries_total": 368,
+  "boundaries_unpainted": 193
+}

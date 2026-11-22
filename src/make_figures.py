@@ -13,7 +13,9 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import FancyArrow
 
 from av2.utils.io import read_city_SE3_ego, read_feather
+from deviation import inside_crosswalks, painted_boundaries, signed_offsets
 from map_geom import lane_boundaries, on_map_paint
+from measure_deviation import labeled_change_points, measure_log
 from paint import ground_mask, paint_mask
 from tbv_io import load_city_points, load_map
 
@@ -64,6 +66,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("log_dir", type=Path)
     parser.add_argument("--out", type=Path, default=Path("docs/figures"))
+    parser.add_argument("--labels", type=Path, default=Path("data/tbv_labels/tbv_val_split_annotations.json"))
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     stats = {}
@@ -236,6 +239,90 @@ def main() -> None:
         ax.set_ylim(cy - win, cy + win)
         bev(ax)
     save(fig, args.out, "08_crosswalk_zoom.png")
+
+    # Phase 3: measure every painted element.
+    label_pts = labeled_change_points(args.labels, args.log_dir.name)
+    table, shifts = measure_log(xyz, intensity, rng_m, avm, label_pts)
+    boundaries = {eid: xy for eid, _, xy in painted_boundaries(avm)}
+
+    # 9. How one lane line is measured: straighten it, look at the sideways offsets.
+    eid = "lane_33047006_L"
+    row = table.set_index("element").loc[eid]
+    lane_paint = paint_xy[~inside_crosswalks(paint_xy, avm)]
+    offsets, arc, _ = signed_offsets(lane_paint, boundaries[eid])
+    inl = np.abs(offsets - row.offset_cm / 100) < 0.15
+    fig, axes = plt.subplots(1, 2, figsize=(15, 4.5), gridspec_kw={"width_ratios": [3, 1]}, sharey=True)
+    axes[0].axhline(0, color=ORANGE, lw=2, label="map line")
+    axes[0].scatter(arc[~inl], 100 * offsets[~inl], s=4, color=MUTED, label="other paint in the 1 m corridor")
+    axes[0].scatter(arc[inl], 100 * offsets[inl], s=4, color=BLUE, label="paint on the line (inliers)")
+    axes[0].axhline(row.offset_cm, color=INK, lw=1, ls="--")
+    axes[0].set_xlabel("distance along the map line (m)")
+    axes[0].set_ylabel("sideways offset (cm, + = left)")
+    axes[0].legend(loc="upper right", markerscale=3)
+    axes[0].set_title(f"9a. One dashed lane line, straightened ({eid})")
+    axes[1].hist(100 * offsets, bins=np.arange(-100, 101, 5), orientation="horizontal", color=MUTED)
+    axes[1].hist(100 * offsets[inl], bins=np.arange(-100, 101, 5), orientation="horizontal", color=BLUE)
+    axes[1].axhline(row.offset_cm, color=INK, lw=1, ls="--")
+    axes[1].annotate(f"median of inliers\n= {row.offset_cm:+.0f} cm", (axes[1].get_xlim()[1] * 0.35, row.offset_cm),
+                     xytext=(0, 14), textcoords="offset points", color=INK)
+    axes[1].set_xlabel("paint points")
+    axes[1].set_title("9b. Offset histogram")
+    save(fig, args.out, "09_measure_one_line.png")
+
+    # 10. Every element's status, with the TbV change label.
+    status_style = {"measured": (BLUE, 1.8, "-"), "faint_paint": (AQUA, 1.8, "-"),
+                    "paint_missing": (ORANGE, 3.0, "-"), "not_observed": (MUTED, 0.8, (0, (1, 2)))}
+    fig, ax = plt.subplots(figsize=(10, 9))
+    ax.scatter(*paint_xy.T, s=0.1, color="#c9d6e8", rasterized=True)
+    polys = boundaries | {f"xwalk_{pc.id}": pc.polygon[:, :2] for pc in crossings}
+    for eid, st in table[["element", "status"]].values:
+        color, lw, ls = status_style[st]
+        ax.plot(*polys[eid].T, color=color, lw=lw, ls=ls)
+    if label_pts is not None and len(label_pts):
+        ax.plot(*label_pts.T, color=INK, lw=1.5, ls="--")
+        ax.plot([], [], color=INK, lw=1.5, ls="--", label="TbV label: line removed (bike lane)")
+    counts = table.status.value_counts()
+    for st, (color, lw, ls) in status_style.items():
+        ax.plot([], [], color=color, lw=lw, ls=ls, label=f"{st.replace('_', ' ')} ({counts.get(st, 0)})")
+    ax.plot(*traj[:, :2].T, color=INK, lw=0.8)
+    ax.legend(loc="upper right")
+    ax.set_xlim(city_xlim)
+    ax.set_ylim(city_ylim)
+    ax.set_title("10. Each map element: paint found, faint, missing, or not seen")
+    bev(ax)
+    save(fig, args.out, "10_element_status.png")
+
+    # 11. Synthetic test: shift map elements by a known amount, check the measured change.
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    jitter = np.random.default_rng(1)
+    for kind, color, label in ((False, ORANGE, "lane lines"), (True, AQUA, "crosswalks")):
+        sub_s = shifts[(shifts.type == "CROSSWALK") == kind]
+        x = sub_s.injected_cm + jitter.uniform(-1.5, 1.5, len(sub_s)) + (2 if kind else -2)
+        ax.scatter(x, sub_s.error_cm.clip(-60, 60), s=40, color=color, label=label, zorder=3,
+                   edgecolor=SURFACE, linewidth=1)
+    ax.axhspan(-5, 5, color=MUTED, alpha=0.35, lw=0)
+    ax.annotate("±5 cm", (1.005, 0), xycoords=("axes fraction", "data"), va="center", color=INK_2)
+    lost = shifts[shifts.error_cm.isna()].groupby("injected_cm").size()
+    for shift, n in lost.items():
+        ax.annotate(f"{n} lane line{'s' if n > 1 else ''}\nnot found", (shift, 1.0), xycoords=("data", "axes fraction"),
+                    ha="center", va="top", color=INK_2)
+    ax.axhline(0, color=INK_2, lw=0.8)
+    ax.set_xticks(sorted(shifts.injected_cm.unique()))
+    ax.set_xlabel("injected map shift (cm)")
+    ax.set_ylabel("recovery error (cm, clipped at ±60)")
+    ax.legend(loc="lower left")
+    ax.set_title("11. Synthetic test: move the map on purpose, measure how much it moved")
+    save(fig, args.out, "11_synthetic_shift.png")
+
+    measured = table[table.status == "measured"]
+    good = shifts.error_cm.abs() <= 5
+    stats |= {"elements_total": len(table), "status_counts": counts.to_dict(),
+              "labeled_elements": int(table.labeled_change.sum()) if label_pts is not None else None,
+              "labeled_paint_missing": int((table.labeled_change & (table.status == "paint_missing")).sum())
+              if label_pts is not None else None,
+              "measured_abs_offset_median_cm": round(float(measured.offset_cm.abs().median()), 1),
+              "synthetic_within_5cm_lanes": round(float(good[shifts.type != "CROSSWALK"].mean()), 2),
+              "synthetic_within_5cm_crosswalks": round(float(good[shifts.type == "CROSSWALK"].mean()), 2)}
 
     (args.out / "stats.json").write_text(json.dumps(stats, indent=2))
     print(json.dumps(stats, indent=2))

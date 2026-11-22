@@ -9,5 +9,17 @@
   "band_on_map_frac": 0.668,
   "ge50_on_map_frac": 0.356,
   "boundaries_total": 368,
-  "boundaries_unpainted": 193
+  "boundaries_unpainted": 193,
+  "elements_total": 119,
+  "status_counts": {
+    "not_observed": 88,
+    "measured": 14,
+    "paint_missing": 9,
+    "faint_paint": 8
+  },
+  "labeled_elements": 3,
+  "labeled_paint_missing": 3,
+  "measured_abs_offset_median_cm": 9.2,
+  "synthetic_within_5cm_lanes": 0.6,
+  "synthetic_within_5cm_crosswalks": 1.0
 }

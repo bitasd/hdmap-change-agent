@@ -7,7 +7,7 @@ Each phase ends with something you can show (plot, number, demo).
 | 0 | Setup | Repo, env, download one TbV log (no cameras) | Working env + data | ✅ Done |
 | 1 | See the data | LiDAR in city frame + HD map overlay (PNG), then Rerun 3D viewer | `docs/figures/04_lidar_on_map.png`, `src/view_rerun.py` | ✅ Done |
 | 2 | Find the paint | Separate ground points, keep high-intensity points (lane paint) | `docs/figures/07_paint_on_map.png`, `src/paint.py` | ✅ Done |
-| 3 | Measure deviation | Distance from paint points to each map lane boundary / crosswalk | Per-element error table (cm) | ⬜ |
+| 3 | Measure deviation | Distance from paint points to each map lane boundary / crosswalk | `docs/results/deviation_*.csv`, `src/deviation.py`, figs 9-11 | ✅ Done |
 | 4 | Confidence | Score each element: point coverage, occlusion, intensity noise | Error + confidence per element | ⬜ |
 | 5 | Eval | (a) Shift map elements by 10/25/50 cm and check recovery; (b) TbV match/mismatch labels → precision/recall | Eval report + baseline numbers | ⬜ |
 | 6 | Post-training: calibration | Make "90% confident" mean right 90% of the time (temperature scaling / isotonic) | Calibration curve before/after | ⬜ |

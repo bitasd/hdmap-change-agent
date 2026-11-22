@@ -11,7 +11,10 @@ for each, and (later) wraps it in an agent you can ask questions in plain Englis
 pipeline flags the removed line as *paint missing* (3 / 3 map elements of the labeled change), using
 only LiDAR geometry and intensity, no training. Where paint is present, map elements are measured to
 within a few cm, and a synthetic test (moving map elements by 10 - 50 cm on purpose) recovers the shift
-within 5 cm for every element locked on its line.
+within 5 cm for every element locked on its line. Projecting the map into the car's cameras confirms it:
+the flagged lines lie on bare asphalt.
+
+![HD map projected into the cameras](docs/figures/12_map_in_camera.png)
 
 **Step-by-step walkthrough with figures: [docs/walkthrough.md](docs/walkthrough.md)**
 

@@ -12,6 +12,7 @@ import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import FancyArrow
 
+from av2.geometry.camera.pinhole_camera import PinholeCamera
 from av2.utils.io import read_city_SE3_ego, read_feather
 from deviation import inside_crosswalks, painted_boundaries, signed_offsets
 from map_geom import lane_boundaries, on_map_paint
@@ -313,6 +314,41 @@ def main() -> None:
     ax.legend(loc="lower left")
     ax.set_title("11. Synthetic test: move the map on purpose, measure how much it moved")
     save(fig, args.out, "11_synthetic_shift.png")
+
+    # 12. Check with the cameras: HD map elements projected into camera images, colored by status.
+    cam_dir = args.log_dir / "sensors" / "cameras"
+    views = [(cam, sorted((cam_dir / cam).glob("*.jpg"))[0]) for cam in ("ring_front_center", "ring_rear_left")
+             if (cam_dir / cam).is_dir() and any((cam_dir / cam).glob("*.jpg"))]
+    if views:
+        polys3d = {f"xwalk_{pc.id}": pc.polygon for pc in crossings}
+        for ls in avm.get_scenario_lane_segments():
+            polys3d[f"lane_{ls.id}_L"] = ls.left_lane_boundary.xyz
+            polys3d[f"lane_{ls.id}_R"] = ls.right_lane_boundary.xyz
+        widths = [plt.imread(img).shape[1] / plt.imread(img).shape[0] for _, img in views]
+        fig, axes = plt.subplots(1, len(views), figsize=(8 * sum(widths), 8), gridspec_kw={"width_ratios": widths})
+        for ax, (cam_name, img_path) in zip(np.atleast_1d(axes), views):
+            cam = PinholeCamera.from_feather(args.log_dir, cam_name)
+            ts = int(img_path.stem)
+            ego_SE3_city = city_SE3_ego[pose_ts[np.abs(pose_ts - ts).argmin()]].inverse()
+            ax.imshow(plt.imread(img_path))
+            for eid, st in table[["element", "status"]].values:
+                color, lw, ls_ = status_style[st]
+                dense = np.concatenate([np.linspace(a, b, max(2, int(np.linalg.norm(b - a) / 0.25)))
+                                        for a, b in zip(polys3d[eid][:-1], polys3d[eid][1:])])
+                uv, pts_cam, valid = cam.project_ego_to_img(ego_SE3_city.transform_point_cloud(dense))
+                valid &= pts_cam[:, 2] < 40  # only the next 40 m, farther lines get too thin to read
+                uv[~valid] = np.nan  # breaks the line where it leaves the image
+                ax.plot(*uv.T, color=color, lw=2 * lw, ls=ls_)
+            ax.set_xlim(0, cam.width_px)
+            ax.set_ylim(cam.height_px, 0)
+            ax.axis("off")
+            ax.set_title(f"{cam_name.replace('_', ' ')}, t = {max(0.0, (ts - t0) * 1e-9):.1f} s", fontsize=11)
+        for st, (color, lw, ls_) in status_style.items():
+            fig.axes[0].plot([], [], color=color, lw=2 * lw, ls=ls_, label=st.replace("_", " "))
+        fig.legend(*fig.axes[0].get_legend_handles_labels(), loc="lower center", ncol=4)
+        fig.suptitle("12. HD map elements projected into the cameras, colored by LiDAR status",
+                     x=0.01, ha="left", fontweight="bold", fontsize=13)
+        save(fig, args.out, "12_map_in_camera.png")
 
     measured = table[table.status == "measured"]
     good = shifts.error_cm.abs() <= 5
